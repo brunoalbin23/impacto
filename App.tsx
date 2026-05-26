@@ -1,20 +1,23 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react'
+import { Text, View } from 'react-native'
+import { supabase } from './lib/supabase'
 
 export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
-}
+  const [estado, setEstado] = useState('Conectando...')
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+  useEffect(() => {
+    supabase.auth.getSession().then(({ error }) => {
+      if (error) {
+        setEstado('✗ Error: ' + error.message)
+      } else {
+        setEstado('✓ Supabase conectado')
+      }
+    })
+  }, [])
+
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+      <Text style={{ fontSize: 18 }}>{estado}</Text>
+    </View>
+  )
+}
