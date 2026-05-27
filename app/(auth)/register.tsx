@@ -20,6 +20,7 @@ export default function Register() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
   const router = useRouter()
 
   const handleRegister = async () => {
@@ -38,33 +39,42 @@ export default function Register() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        data: { nombre: nombre.trim() },
+      },
     })
 
+    setLoading(false)
+
     if (signUpError) {
-      setLoading(false)
       setError('No se pudo crear la cuenta. Intentá de nuevo.')
       return
     }
 
     if (!data.user) {
-      setLoading(false)
       setError('No se pudo crear la cuenta. Intentá de nuevo.')
       return
     }
 
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: data.user.id,
-      nombre: nombre.trim(),
-      email: email.trim(),
-      rol: 'alumno',
-    })
-
-    setLoading(false)
-
-    if (profileError) {
-      setError('Cuenta creada pero hubo un error al guardar el perfil.')
-      return
+    // Si no hay sesión, Supabase requiere confirmar el email
+    if (!data.session) {
+      setSuccess(true)
     }
+    // Si hay sesión, onAuthStateChange dispara el redirect automáticamente
+  }
+
+  if (success) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 }]}>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 12 }}>¡Cuenta creada!</Text>
+        <Text style={{ color: '#888', fontSize: 15, textAlign: 'center', marginBottom: 32 }}>
+          Revisá tu email para confirmar la cuenta y luego iniciá sesión.
+        </Text>
+        <TouchableOpacity style={styles.button} onPress={() => router.replace('/(auth)/login')}>
+          <Text style={styles.buttonText}>Ir al login</Text>
+        </TouchableOpacity>
+      </View>
+    )
   }
 
   return (
