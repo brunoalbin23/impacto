@@ -109,9 +109,14 @@ app/
       _layout.tsx                    — Stack sin header
       index.tsx                      — Dashboard entrenador (logo, saludo, 4 cards, logout)
       alumnos.tsx                    — Lista de alumnos con FAB para agregar
-      cuotas.tsx                     — Placeholder "Próximamente"
-      clases.tsx                     — Placeholder "Próximamente"
-      asistencia.tsx                 — Placeholder "Próximamente"
+      cuotas.tsx                     — Lista de cuotas con filtros (Todos/Pendientes/Vencidos/Pagados) y FAB
+      cuotas/
+        nueva.tsx                    — Formulario registrar cuota (alumno, plan, monto, fecha, método pago)
+        [id].tsx                     — Detalle cuota + botón marcar pagado + edición inline
+      clases.tsx                     — Lista de clases con días (píldoras) y horario
+      clases/
+        [id].tsx                     — Crear (id='nuevo') / Editar clase + botón eliminar
+      asistencia.tsx                 — Registro asistencia del día por clase
       alumno/
         nuevo.tsx                    — Formulario crear alumno
         [id].tsx                     — Perfil + edición inline de alumno
@@ -147,9 +152,80 @@ assets/
 
 ---
 
+## Módulos completados (continuación)
+
+### Módulo Cuotas (entrenador)
+- **Lista** (`cuotas.tsx`): FlatList con filtros horizontales (Todos/Pendientes/Vencidos/Pagados). Cards con color por estado: rojo=vencido (`borderColor`+`backgroundColor`), amarillo=por vencer, verde=pagado. Lógica de estado visual calculada client-side (no depende del campo `estado` del DB para el color). FAB para nueva cuota. `useFocusEffect` para recarga al volver.
+- **Crear** (`cuotas/nueva.tsx`): Selector de alumno y plan via Modal bottom-sheet. Fecha DD/MM/AAAA con parse a YYYY-MM-DD. Monto editable. Selector método pago (3 botones). Al seleccionar plan, pre-carga el precio en el campo monto.
+- **Detalle/Editar** (`cuotas/[id].tsx`): Card central con estado visual + monto grande. Vista de datos en InfoSection. Edición inline toggle igual que perfil alumno. Botón verde "Marcar como pagado" (solo si estado != pagado). Modales para alumno y plan.
+
+### Tablas Supabase nuevas (módulo cuotas)
+- `public.planes` — id, nombre, descripcion, precio, created_at
+- `public.cuotas` — id, alumno_id (FK→alumnos), plan_id (FK→planes nullable), fecha_vencimiento, monto, metodo_pago, estado, fecha_pago, created_at
+
+### RPCs nuevas (módulo cuotas)
+| Función | Parámetros | Descripción |
+|---|---|---|
+| `get_planes` | — | Devuelve id, nombre, precio de todos los planes |
+| `get_cuotas_entrenador` | — | Cuotas de alumnos del entrenador autenticado con alumno_nombre y plan_nombre |
+| `get_cuota` | `p_id UUID` | Una cuota por id, verifica ownership |
+| `crear_cuota` | `p_alumno_id, p_plan_id, p_fecha_vencimiento, p_monto, p_metodo_pago` | Crea cuota con estado='pendiente' |
+| `marcar_cuota_pagada` | `p_id` | Setea estado='pagado' y fecha_pago=CURRENT_DATE |
+| `actualizar_cuota` | `p_id, p_alumno_id, p_plan_id, p_fecha_vencimiento, p_monto, p_metodo_pago, p_estado` | Edición completa |
+
+Script SQL: `supabase/cuotas_setup.sql`
+
+---
+
 ## Módulos pendientes
 
-- **Cuotas**: gestión de pagos/cuotas por alumno
+- **Cuotas**: ✅ COMPLETADO
+
+### Módulo Clases (entrenador)
+- **Lista** (`clases.tsx`): Cards con nombre, capacidad badge, todos los 7 días mostrados como píldoras (blancas=activo, oscuras=inactivo) y horario con icono reloj. `parseDias()` maneja tanto JS array como el string `{lun,mar}` que puede devolver Postgres.
+- **Crear/Editar** (`clases/[id].tsx`): Una sola pantalla. `id === 'nuevo'` → crear, cualquier UUID → editar. Toggle días con `flexWrap`. Horario HH:MM en dos inputs lado a lado. Botón eliminar con `Alert.alert` de confirmación solo en modo edición.
+
+### Tablas Supabase nuevas (módulo clases)
+- `public.clases` — id, entrenador_id, nombre, descripcion, capacidad_max, dias_semana TEXT[], hora_inicio TIME, hora_fin TIME, created_at
+
+### RPCs nuevas (módulo clases)
+| Función | Parámetros | Descripción |
+|---|---|---|
+| `get_mis_clases` | — | Clases del entrenador autenticado |
+| `get_clase` | `p_id UUID` | Una clase por id, verifica ownership |
+| `crear_clase` | `p_nombre, p_descripcion, p_capacidad_max, p_dias_semana TEXT[], p_hora_inicio, p_hora_fin` | Crea clase |
+| `actualizar_clase` | `p_id + mismos parámetros` | Edita clase |
+| `eliminar_clase` | `p_id UUID` | Elimina clase, verifica ownership |
+
+Script SQL: `supabase/clases_setup.sql`
+
+### Módulo Asistencia (entrenador)
+- **Pantalla única** (`asistencia.tsx`): Fecha de hoy formateada ("Jueves 29 de Mayo"). Selector de clase (Modal bottom-sheet). Una vez seleccionada, carga `get_asistencia_hoy` y muestra todos los alumnos activos del entrenador. Cada fila es tappable para togglear Presente/Ausente. Resumen contador arriba de la lista. Si la asistencia ya fue guardada hoy → badge amarillo "Editando asistencia ya guardada". Botón guardar. Mensaje de éxito en verde después de guardar.
+- **Reset en `useFocusEffect`**: al volver a la pantalla limpia clase/alumnos para evitar estado stale.
+
+### Tablas Supabase nuevas (módulo asistencia)
+- `public.asistencias` — id, clase_id (FK→clases), alumno_id (FK→alumnos), fecha DATE, estado TEXT, created_at. UNIQUE(clase_id, alumno_id, fecha) para upsert.
+
+### RPCs nuevas (módulo asistencia)
+| Función | Parámetros | Descripción |
+|---|---|---|
+| `get_asistencia_hoy` | `p_clase_id UUID` | Alumnos activos del entrenador con estado de hoy (COALESCE → 'ausente') + `tiene_registro` bool |
+| `guardar_asistencia` | `p_clase_id UUID, p_registros JSONB` | Upsert masivo ON CONFLICT(clase_id, alumno_id, fecha) |
+| `get_historial_asistencia` | `p_alumno_id UUID` | Historial completo del alumno (para perfil, v2) |
+
+Script SQL: `supabase/asistencia_setup.sql`
+
+---
+
+## Estado v1 — COMPLETO ✅
+
+Todos los módulos del dashboard del entrenador están implementados:
+- ✅ Auth (login, registro, logout, redirect por rol)
+- ✅ Dashboard entrenador
+- ✅ Alumnos (lista, crear, perfil/editar)
+- ✅ Cuotas (lista+filtros, nueva, detalle/editar)
+- ✅ Clases (lista, crear/editar/eliminar)
+- ✅ Asistencia (registro diario por clase)
 - **Clases**: gestión de clases y horarios
 - **Asistencia**: registro de asistencia por clase
 - **Dashboard alumno**: contenido real (clases, plan, asistencia)
