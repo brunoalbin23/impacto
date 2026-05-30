@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
+import { useState, useCallback } from 'react'
+import { useFocusEffect } from 'expo-router'
 
 const SECTIONS = [
   {
@@ -38,9 +40,18 @@ export default function EntrenadorDashboard() {
   const { session } = useAuth()
   const { width } = useWindowDimensions()
   const cardSize = (width - 48) / 2
+  const [solicitudesPendientes, setSolicitudesPendientes] = useState(0)
 
   const nombre = session?.user?.user_metadata?.nombre as string | undefined
   const firstName = nombre?.split(' ')[0] ?? session?.user?.email?.split('@')[0] ?? 'Entrenador'
+
+  useFocusEffect(
+    useCallback(() => {
+      supabase.rpc('get_solicitudes_pendientes').then(({ data }) => {
+        setSolicitudesPendientes(data?.length ?? 0)
+      })
+    }, [])
+  )
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -72,6 +83,37 @@ export default function EntrenadorDashboard() {
             </TouchableOpacity>
           ))}
         </View>
+
+        <TouchableOpacity
+          style={styles.solicitudesCard}
+          onPress={() => router.push('/(tabs)/entrenador/rutinas' as any)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.solicitudesLeft}>
+            <Ionicons name="barbell-outline" size={24} color="#fff" />
+            <Text style={styles.solicitudesLabel}>Rutinas</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#444" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.solicitudesCard}
+          onPress={() => router.push('/(tabs)/entrenador/solicitudes')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.solicitudesLeft}>
+            <Ionicons name="person-add-outline" size={24} color="#fff" />
+            <Text style={styles.solicitudesLabel}>Solicitudes de ingreso</Text>
+          </View>
+          <View style={styles.solicitudesRight}>
+            {solicitudesPendientes > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{solicitudesPendientes}</Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={16} color="#444" />
+          </View>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.logoutButton}
@@ -124,7 +166,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     gap: 16,
-    marginBottom: 32,
+    marginBottom: 16,
   },
   card: {
     backgroundColor: '#0f0f0f',
@@ -143,6 +185,48 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
     fontWeight: '600',
+  },
+  solicitudesCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: '#0f0f0f',
+    borderWidth: 1,
+    borderColor: '#1e1e1e',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+  },
+  solicitudesLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  solicitudesLabel: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  solicitudesRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  badge: {
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
   logoutButton: {
     flexDirection: 'row',

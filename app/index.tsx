@@ -3,7 +3,7 @@ import { ActivityIndicator, View } from 'react-native'
 import { useAuth } from '@/lib/auth-context'
 
 export default function Index() {
-  const { loading, session, role } = useAuth()
+  const { loading, session, role, estado } = useAuth()
 
   if (loading) {
     return (
@@ -19,6 +19,14 @@ export default function Index() {
 
   if (role === 'entrenador') {
     return <Redirect href="/(tabs)/entrenador" />
+  }
+
+  if (estado === 'pendiente') {
+    return <Redirect href="/(tabs)/alumno/pendiente" />
+  }
+
+  if (estado === 'rechazado') {
+    return <Redirect href="/(tabs)/alumno/rechazado" />
   }
 
   return <Redirect href="/(tabs)/alumno" />

@@ -56,10 +56,13 @@ nombre     TEXT
 email      TEXT
 telefono   TEXT
 rol        TEXT  ('entrenador' | 'alumno')
+estado     TEXT  ('activo' | 'pendiente' | 'rechazado')  DEFAULT 'pendiente'
 created_at TIMESTAMPTZ
 ```
 - Para usuarios con auth: `id` coincide con `auth.users.id`, creado por trigger
 - Para alumnos sin auth (creados por entrenador): `id` generado manualmente en RPC
+- Nuevos registros via auth.signUp() → `estado = 'pendiente'` hasta aprobación del entrenador
+- Entrenadores → `estado = 'activo'` (seteado por trigger o manualmente)
 
 ### `public.alumnos`
 ```
@@ -73,6 +76,20 @@ fecha_inicio   DATE
 estado         TEXT  ('activo' | 'inactivo')
 created_at     TIMESTAMPTZ
 ```
+
+---
+
+## Arquitectura de auth — v2 (estado)
+
+El contexto ahora expone `{ session, role, estado, loading }`. El campo `estado` viene de `profiles.estado`.
+
+### Flujo de redirect por rol+estado
+- `entrenador` → `/(tabs)/entrenador`
+- `alumno` + `estado='activo'` → `/(tabs)/alumno`
+- `alumno` + `estado='pendiente'` → `/(tabs)/alumno/pendiente`
+- `alumno` + `estado='rechazado'` → `/(tabs)/alumno/rechazado`
+
+Este routing aplica en `app/index.tsx` (gate) y `app/(auth)/_layout.tsx` (post-login).
 
 ---
 
@@ -217,6 +234,17 @@ Script SQL: `supabase/asistencia_setup.sql`
 
 ---
 
+### RPCs nuevas (módulo solicitudes — v2)
+| Función | Parámetros | Descripción |
+|---|---|---|
+| `get_solicitudes_pendientes` | — | Perfiles con rol='alumno' y estado='pendiente', ordenados por fecha |
+| `aprobar_alumno` | `p_profile_id UUID` | Setea estado='activo' e inserta en alumnos con entrenador autenticado |
+| `rechazar_alumno` | `p_profile_id UUID` | Setea estado='rechazado' |
+
+Script SQL: `supabase/solicitudes_setup.sql`
+
+---
+
 ## Estado v1 — COMPLETO ✅
 
 Todos los módulos del dashboard del entrenador están implementados:
@@ -226,6 +254,62 @@ Todos los módulos del dashboard del entrenador están implementados:
 - ✅ Cuotas (lista+filtros, nueva, detalle/editar)
 - ✅ Clases (lista, crear/editar/eliminar)
 - ✅ Asistencia (registro diario por clase)
+
+## Estado v2 — EN PROGRESO
+
+- ✅ Auth con campo `estado` (activo/pendiente/rechazado)
+- ✅ Registro → estado='pendiente', mensaje de solicitud enviada
+- ✅ Pantalla alumno/pendiente
+- ✅ Pantalla alumno/rechazado
+- ✅ Dashboard entrenador: card "Solicitudes" con badge de pendientes
+- ✅ Pantalla entrenador/solicitudes (aprobar/rechazar)
+- ✅ Módulo Rutinas (lista, crear, detalle/editar, ejercicios, asignar alumnos)
+- ✅ Dashboard alumno: rutina + cuota + clases
+
+### Módulo Rutinas (entrenador)
+- **Lista** (`rutinas.tsx`): Cards con nombre, nivel badge (color por nivel), count de ejercicios. FAB +.
+- **Crear** (`rutinas/nuevo.tsx`): nombre, descripción, nivel (3 botones toggle). Redirige al detalle al crear.
+- **Detalle** (`rutinas/[id].tsx`): Información con edición inline toggle. Lista de ejercicios (tap para editar en modal). Sección alumnos asignados con chips + × para desasignar. Modal para agregar/editar ejercicios. Modal para asignar alumno (filtra los no asignados). Botón eliminar rutina.
+
+### Tablas Supabase nuevas (módulo rutinas)
+- `public.rutinas` — id, entrenador_id (FK→profiles.id), nombre, descripcion, nivel, created_at
+- `public.ejercicios` — id, rutina_id (FK→rutinas.id CASCADE), nombre, series, repeticiones, notas, orden, created_at
+- `public.rutina_alumnos` — id, rutina_id, alumno_id, fecha_asignacion, activa, UNIQUE(rutina_id, alumno_id)
+
+### RPCs nuevas (módulo rutinas)
+| Función | Parámetros | Descripción |
+|---|---|---|
+| `get_mis_rutinas` | — | Rutinas del entrenador con count de ejercicios |
+| `get_rutina` | `p_id UUID` | Rutina + ejercicios como JSONB |
+| `crear_rutina` | `p_nombre, p_descripcion, p_nivel` | Crea rutina, devuelve id |
+| `actualizar_rutina` | `p_id + mismos` | Actualiza rutina |
+| `eliminar_rutina` | `p_id` | Elimina con cascade |
+| `agregar_ejercicio` | `p_rutina_id, p_nombre, p_series, p_repeticiones, p_notas, p_orden` | Agrega ejercicio |
+| `actualizar_ejercicio` | `p_id + mismos parámetros` | Actualiza ejercicio |
+| `eliminar_ejercicio` | `p_id` | Elimina ejercicio |
+| `asignar_rutina` | `p_rutina_id, p_alumno_id` | Asigna con ON CONFLICT upsert |
+| `desasignar_rutina` | `p_rutina_id, p_alumno_id` | Desasigna |
+| `get_alumnos_rutina` | `p_rutina_id` | Alumnos asignados con datos de perfil |
+| `get_rutina_alumno` | `p_alumno_id` | Rutina activa de un alumno |
+
+Script SQL: `supabase/rutinas_setup.sql`
+
+### Dashboard alumno (v2)
+- **`app/(tabs)/alumno/index.tsx`**: Header con logo y nombre. Card "Mi rutina" (nombre, nivel badge, lista de ejercicios). Card "Mi cuota" (plan, monto, vencimiento, estado con color). Card "Clases del gym" (nombre, días pills, horario). Pull-to-refresh.
+
+### RPCs nuevas (dashboard alumno)
+| Función | Parámetros | Descripción |
+|---|---|---|
+| `get_dashboard_alumno` | — | Busca el alumno por `profile_id = auth.uid()`. Devuelve 1 fila con rutina activa (ejercicios como JSONB) + cuota más reciente. |
+| `get_clases_disponibles` | — | Todas las clases con nombre del entrenador. |
+
+Script SQL: `supabase/alumno_dashboard_setup.sql`
+
+### Lógica de estado de cuota (client-side)
+- `estado = 'pagado'` → verde (`#22c55e`) — "Pagada"
+- `fecha_vencimiento < hoy` → rojo (`#ef4444`) — "Vencida"
+- `fecha_vencimiento <= hoy + 5 días` → amarillo (`#f59e0b`) — "Por vencer"
+- Resto → gris (`#888`) — "Pendiente"
 - **Clases**: gestión de clases y horarios
 - **Asistencia**: registro de asistencia por clase
 - **Dashboard alumno**: contenido real (clases, plan, asistencia)

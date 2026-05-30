@@ -5,12 +5,14 @@ import { supabase } from './supabase'
 type AuthState = {
   session: Session | null
   role: string | null
+  estado: string | null
   loading: boolean
 }
 
 const AuthContext = createContext<AuthState>({
   session: null,
   role: null,
+  estado: null,
   loading: true,
 })
 
@@ -21,12 +23,12 @@ export function useAuth() {
 // Uses the access_token directly to bypass the timing issue where
 // supabase.from() inside onAuthStateChange runs before the client
 // has the JWT set internally, causing 42501 permission errors.
-async function fetchRoleWithToken(
+async function fetchProfileWithToken(
   userId: string,
   accessToken: string
-): Promise<string | null> {
+): Promise<{ role: string | null; estado: string | null }> {
   try {
-    const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/rest/v1/profiles?select=rol&id=eq.${userId}&limit=1`
+    const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/rest/v1/profiles?select=rol,estado&id=eq.${userId}&limit=1`
     const res = await Promise.race([
       fetch(url, {
         headers: {
@@ -39,14 +41,14 @@ async function fetchRoleWithToken(
       ),
     ])
     if (!res.ok) {
-      console.error('fetchRole HTTP error:', res.status)
-      return null
+      console.error('fetchProfile HTTP error:', res.status)
+      return { role: null, estado: null }
     }
     const data = await res.json()
-    return data[0]?.rol ?? null
+    return { role: data[0]?.rol ?? null, estado: data[0]?.estado ?? null }
   } catch (e) {
-    console.error('fetchRole failed:', e)
-    return null
+    console.error('fetchProfile failed:', e)
+    return { role: null, estado: null }
   }
 }
 
@@ -54,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     session: null,
     role: null,
+    estado: null,
     loading: true,
   })
 
@@ -64,13 +67,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (_event, newSession) => {
         if (!mounted) return
 
-        const newRole = newSession
-          ? await fetchRoleWithToken(newSession.user.id, newSession.access_token)
-          : null
+        const { role: newRole, estado: newEstado } = newSession
+          ? await fetchProfileWithToken(newSession.user.id, newSession.access_token)
+          : { role: null, estado: null }
 
         if (!mounted) return
 
-        setState({ session: newSession, role: newRole, loading: false })
+        setState({ session: newSession, role: newRole, estado: newEstado, loading: false })
       }
     )
 
