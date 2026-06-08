@@ -6,7 +6,7 @@ import { Image } from 'expo-image'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useCallback, useState } from 'react'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 
@@ -102,6 +102,7 @@ function getCuotaStatus(estado: string | null, vencimiento: string | null) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardAlumno() {
+  const router = useRouter()
   const { session } = useAuth()
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [clases, setClases] = useState<Clase[]>([])
@@ -170,6 +171,26 @@ export default function DashboardAlumno() {
           />
           <Text style={styles.greeting}>Hola, {firstName}</Text>
           <Text style={styles.headerSub}>PANEL DEL ALUMNO</Text>
+        </View>
+
+        {/* ── Acciones rápidas ── */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => router.push('/(tabs)/alumno/entrenar')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="barbell-outline" size={20} color="#000" />
+            <Text style={styles.actionBtnText}>Entrenar hoy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.actionBtnSecondary]}
+            onPress={() => router.push('/(tabs)/alumno/historial')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="time-outline" size={20} color="#fff" />
+            <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>Historial</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── Mi rutina ── */}
@@ -404,6 +425,31 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', gap: 10, paddingVertical: 16 },
   emptyText: { color: '#444', fontSize: 14, textAlign: 'center' },
   emptyHint: { color: '#444', fontSize: 13 },
+
+  // Acciones rápidas
+  actionRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    gap: 10,
+  },
+  actionBtn: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  actionBtnSecondary: {
+    backgroundColor: '#0f0f0f',
+    borderWidth: 1,
+    borderColor: '#1e1e1e',
+  },
+  actionBtnText:          { color: '#000', fontSize: 15, fontWeight: '700' },
+  actionBtnTextSecondary: { color: '#fff' },
 
   // Logout
   logoutBtn: {
