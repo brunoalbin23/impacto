@@ -21,18 +21,22 @@ type Ejercicio = {
   orden: number
 }
 
-type DashboardData = {
-  alumno_id: string | null
-  rutina_id: string | null
-  rutina_nombre: string | null
-  rutina_nivel: string | null
-  rutina_ejercicios: Ejercicio[]
-  cuota_id: string | null
+type Rutina = {
+  nombre: string
+  nivel: string | null
+  ejercicios: Ejercicio[]
+}
+
+type Cuota = {
+  monto: number | null
+  estado: string | null
+  fecha_vencimiento: string | null
   plan_nombre: string | null
-  cuota_monto: number | null
-  cuota_vencimiento: string | null
-  cuota_estado: string | null
-  cuota_fecha_pago: string | null
+}
+
+type DashboardData = {
+  rutina: Rutina | null
+  cuota: Cuota | null
 }
 
 type Clase = {
@@ -108,30 +112,23 @@ export default function DashboardAlumno() {
   const firstName = nombre?.split(' ')[0] ?? 'Alumno'
 
   const load = useCallback(async () => {
+    if (!session) return
     const [dashRes, clasesRes] = await Promise.all([
-      supabase.rpc('get_dashboard_alumno'),
+      supabase.rpc('get_dashboard_alumno', { p_alumno_id: session.user.id }),
       supabase.rpc('get_clases_disponibles'),
     ])
-    if (dashRes.data && (dashRes.data as any[]).length > 0) {
-      const row = (dashRes.data as any[])[0]
+    if (dashRes.error) console.error('get_dashboard_alumno error:', dashRes.error)
+    if (dashRes.data) {
+      const row = dashRes.data as any
       setDashboard({
-        alumno_id:        row.alumno_id,
-        rutina_id:        row.rutina_id,
-        rutina_nombre:    row.rutina_nombre,
-        rutina_nivel:     row.rutina_nivel,
-        rutina_ejercicios: Array.isArray(row.rutina_ejercicios) ? row.rutina_ejercicios : [],
-        cuota_id:         row.cuota_id,
-        plan_nombre:      row.plan_nombre,
-        cuota_monto:      row.cuota_monto,
-        cuota_vencimiento: row.cuota_vencimiento,
-        cuota_estado:     row.cuota_estado,
-        cuota_fecha_pago: row.cuota_fecha_pago,
+        rutina: row.rutina ?? null,
+        cuota:  row.cuota  ?? null,
       })
     }
     setClases((clasesRes.data as Clase[]) ?? [])
     setLoading(false)
     setRefreshing(false)
-  }, [])
+  }, [session])
 
   useFocusEffect(
     useCallback(() => {
@@ -155,7 +152,7 @@ export default function DashboardAlumno() {
     )
   }
 
-  const cuotaStatus = getCuotaStatus(dashboard?.cuota_estado ?? null, dashboard?.cuota_vencimiento ?? null)
+  const cuotaStatus = getCuotaStatus(dashboard?.cuota?.estado ?? null, dashboard?.cuota?.fecha_vencimiento ?? null)
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -182,23 +179,23 @@ export default function DashboardAlumno() {
             <Text style={styles.cardTitle}>Mi rutina</Text>
           </View>
 
-          {dashboard?.rutina_id ? (
+          {dashboard?.rutina ? (
             <View style={{ gap: 12 }}>
               <View style={styles.rutinaMeta}>
-                <Text style={styles.rutinaName}>{dashboard.rutina_nombre}</Text>
-                {dashboard.rutina_nivel ? (
-                  <View style={[styles.nivelBadge, { borderColor: NIVEL_COLOR[dashboard.rutina_nivel] ?? '#555' }]}>
-                    <Text style={[styles.nivelText, { color: NIVEL_COLOR[dashboard.rutina_nivel] ?? '#555' }]}>
-                      {dashboard.rutina_nivel}
+                <Text style={styles.rutinaName}>{dashboard.rutina.nombre}</Text>
+                {dashboard.rutina.nivel ? (
+                  <View style={[styles.nivelBadge, { borderColor: NIVEL_COLOR[dashboard.rutina.nivel] ?? '#555' }]}>
+                    <Text style={[styles.nivelText, { color: NIVEL_COLOR[dashboard.rutina.nivel] ?? '#555' }]}>
+                      {dashboard.rutina.nivel}
                     </Text>
                   </View>
                 ) : null}
               </View>
 
-              {dashboard.rutina_ejercicios.length > 0 ? (
+              {dashboard.rutina.ejercicios.length > 0 ? (
                 <View style={{ gap: 0 }}>
                   <View style={styles.divider} />
-                  {dashboard.rutina_ejercicios.map((ej, i) => (
+                  {dashboard.rutina.ejercicios.map((ej, i) => (
                     <View key={ej.id} style={[styles.ejRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#151515' }]}>
                       <Text style={styles.ejNombre}>{ej.nombre}</Text>
                       <Text style={styles.ejDetalle}>
@@ -229,20 +226,20 @@ export default function DashboardAlumno() {
             <Text style={styles.cardTitle}>Mi cuota</Text>
           </View>
 
-          {dashboard?.cuota_id ? (
+          {dashboard?.cuota ? (
             <View style={{ gap: 0 }}>
               <View style={styles.divider} />
               <View style={styles.cuotaRow}>
                 <Text style={styles.cuotaLabel}>Plan</Text>
-                <Text style={styles.cuotaValue}>{dashboard.plan_nombre ?? '—'}</Text>
+                <Text style={styles.cuotaValue}>{dashboard.cuota.plan_nombre ?? '—'}</Text>
               </View>
               <View style={[styles.cuotaRow, { borderTopWidth: 1, borderTopColor: '#151515' }]}>
                 <Text style={styles.cuotaLabel}>Monto</Text>
-                <Text style={styles.cuotaValue}>{formatMonto(dashboard.cuota_monto)}</Text>
+                <Text style={styles.cuotaValue}>{formatMonto(dashboard.cuota.monto)}</Text>
               </View>
               <View style={[styles.cuotaRow, { borderTopWidth: 1, borderTopColor: '#151515' }]}>
                 <Text style={styles.cuotaLabel}>Vencimiento</Text>
-                <Text style={styles.cuotaValue}>{formatFecha(dashboard.cuota_vencimiento)}</Text>
+                <Text style={styles.cuotaValue}>{formatFecha(dashboard.cuota.fecha_vencimiento)}</Text>
               </View>
               <View style={[styles.cuotaRow, { borderTopWidth: 1, borderTopColor: '#151515' }]}>
                 <Text style={styles.cuotaLabel}>Estado</Text>

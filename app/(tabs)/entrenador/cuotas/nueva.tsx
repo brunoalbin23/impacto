@@ -3,6 +3,7 @@ import {
   ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
   Modal, FlatList,
 } from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -40,6 +41,12 @@ const METODOS: { key: MetodoPago; label: string }[] = [
   { key: 'otro',          label: 'Otro' },
 ]
 
+function dateToDisplay(d: Date): string {
+  const day = d.getDate().toString().padStart(2, '0')
+  const month = (d.getMonth() + 1).toString().padStart(2, '0')
+  return `${day}/${month}/${d.getFullYear()}`
+}
+
 function parseFecha(str: string): string | null {
   const match = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (!match) return null
@@ -60,6 +67,8 @@ export default function NuevaCuota() {
   const [planes, setPlanes] = useState<PlanOption[]>([])
   const [showAlumnoModal, setShowAlumnoModal] = useState(false)
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [pickerDate, setPickerDate] = useState(new Date())
 
   useEffect(() => {
     if (!session) return
@@ -71,6 +80,31 @@ export default function NuevaCuota() {
       setPlanes((pData as PlanOption[]) ?? [])
     })
   }, [session])
+
+  const openDatePicker = () => {
+    if (form.fechaVencimiento) {
+      const iso = parseFecha(form.fechaVencimiento)
+      setPickerDate(iso ? new Date(iso + 'T00:00:00') : new Date())
+    } else {
+      setPickerDate(new Date())
+    }
+    setShowDatePicker(true)
+  }
+
+  const onDateChange = (_: any, selected?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false)
+      if (selected) {
+        setPickerDate(selected)
+        setForm(p => ({ ...p, fechaVencimiento: dateToDisplay(selected) }))
+      }
+    } else {
+      if (selected) {
+        setPickerDate(selected)
+        setForm(p => ({ ...p, fechaVencimiento: dateToDisplay(selected) }))
+      }
+    }
+  }
 
   const handleGuardar = async () => {
     if (!form.alumnoId) { setError('Seleccioná un alumno.'); return }
@@ -145,13 +179,15 @@ export default function NuevaCuota() {
               placeholder="Ej: 15000"
               keyboardType="numeric"
             />
-            <Field
-              label="Fecha de vencimiento"
-              value={form.fechaVencimiento}
-              onChangeText={v => setForm(p => ({ ...p, fechaVencimiento: v }))}
-              placeholder="DD/MM/AAAA"
-              keyboardType="numeric"
-            />
+            <View style={fieldStyles.container}>
+              <Text style={fieldStyles.label}>Fecha de vencimiento</Text>
+              <TouchableOpacity style={styles.selector} onPress={openDatePicker} activeOpacity={0.7}>
+                <Text style={form.fechaVencimiento ? styles.selectorValue : styles.selectorPlaceholder}>
+                  {form.fechaVencimiento || 'Seleccionar fecha'}
+                </Text>
+                <Ionicons name="calendar-outline" size={16} color="#555" />
+              </TouchableOpacity>
+            </View>
           </Section>
 
           <Section label="MÉTODO DE PAGO">
@@ -226,6 +262,42 @@ export default function NuevaCuota() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Date picker */}
+      {showDatePicker && (
+        Platform.OS === 'ios' ? (
+          <Modal visible transparent animationType="slide">
+            <TouchableOpacity
+              style={modalStyles.overlay}
+              activeOpacity={1}
+              onPress={() => setShowDatePicker(false)}
+            >
+              <View style={[modalStyles.sheet, { paddingHorizontal: 20 }]}>
+                <View style={modalStyles.handle} />
+                <Text style={modalStyles.title}>Fecha de vencimiento</Text>
+                <DateTimePicker
+                  value={pickerDate}
+                  mode="date"
+                  display="spinner"
+                  onChange={onDateChange}
+                  locale="es-AR"
+                  themeVariant="dark"
+                />
+                <TouchableOpacity style={styles.saveBtn} onPress={() => setShowDatePicker(false)}>
+                  <Text style={styles.saveBtnText}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={pickerDate}
+            mode="date"
+            display="default"
+            onChange={onDateChange}
+          />
+        )
+      )}
 
       {/* Modal plan */}
       <Modal visible={showPlanModal} transparent animationType="slide">

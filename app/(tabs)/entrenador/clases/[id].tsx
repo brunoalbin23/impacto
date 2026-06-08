@@ -1,8 +1,9 @@
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Alert,
+  Alert, Modal,
 } from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -38,6 +39,19 @@ const DIAS = [
   { key: 'dom', label: 'DOM' },
 ]
 
+function timeStringToDate(str: string): Date {
+  const d = new Date()
+  if (str && str.match(/^\d{1,2}:\d{2}$/)) {
+    const [h, m] = str.split(':').map(Number)
+    d.setHours(h, m, 0, 0)
+  }
+  return d
+}
+
+function dateToTimeDisplay(d: Date): string {
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+}
+
 function parseDias(raw: string[] | string | null): string[] {
   if (!raw) return []
   if (Array.isArray(raw)) return raw
@@ -71,6 +85,10 @@ export default function ClaseForm() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false)
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false)
+  const [pickerStartTime, setPickerStartTime] = useState(new Date())
+  const [pickerEndTime, setPickerEndTime] = useState(new Date())
 
   useEffect(() => {
     if (isNuevo || !session || !id) return
@@ -96,6 +114,46 @@ export default function ClaseForm() {
 
     load()
   }, [id, isNuevo, session])
+
+  const openStartTimePicker = () => {
+    setPickerStartTime(timeStringToDate(form.horaInicio))
+    setShowStartTimePicker(true)
+  }
+
+  const openEndTimePicker = () => {
+    setPickerEndTime(timeStringToDate(form.horaFin))
+    setShowEndTimePicker(true)
+  }
+
+  const onStartTimeChange = (_: any, selected?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowStartTimePicker(false)
+      if (selected) {
+        setPickerStartTime(selected)
+        setForm(p => ({ ...p, horaInicio: dateToTimeDisplay(selected) }))
+      }
+    } else {
+      if (selected) {
+        setPickerStartTime(selected)
+        setForm(p => ({ ...p, horaInicio: dateToTimeDisplay(selected) }))
+      }
+    }
+  }
+
+  const onEndTimeChange = (_: any, selected?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowEndTimePicker(false)
+      if (selected) {
+        setPickerEndTime(selected)
+        setForm(p => ({ ...p, horaFin: dateToTimeDisplay(selected) }))
+      }
+    } else {
+      if (selected) {
+        setPickerEndTime(selected)
+        setForm(p => ({ ...p, horaFin: dateToTimeDisplay(selected) }))
+      }
+    }
+  }
 
   const toggleDia = (dia: string) => {
     setForm(prev => ({
@@ -267,25 +325,29 @@ export default function ClaseForm() {
           <Section label="HORARIO">
             <View style={styles.horaRow}>
               <View style={styles.horaField}>
-                <Field
-                  label="Hora inicio"
-                  value={form.horaInicio}
-                  onChangeText={v => setForm(p => ({ ...p, horaInicio: v }))}
-                  placeholder="HH:MM"
-                  keyboardType="numeric"
-                />
+                <View style={fieldStyles.container}>
+                  <Text style={fieldStyles.label}>Hora inicio</Text>
+                  <TouchableOpacity style={styles.timeSelector} onPress={openStartTimePicker} activeOpacity={0.7}>
+                    <Text style={form.horaInicio ? styles.timeSelectorValue : styles.timeSelectorPlaceholder}>
+                      {form.horaInicio || '--:--'}
+                    </Text>
+                    <Ionicons name="time-outline" size={16} color="#555" />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={styles.horaSep}>
                 <Text style={styles.horaSepText}>—</Text>
               </View>
               <View style={styles.horaField}>
-                <Field
-                  label="Hora fin"
-                  value={form.horaFin}
-                  onChangeText={v => setForm(p => ({ ...p, horaFin: v }))}
-                  placeholder="HH:MM"
-                  keyboardType="numeric"
-                />
+                <View style={fieldStyles.container}>
+                  <Text style={fieldStyles.label}>Hora fin</Text>
+                  <TouchableOpacity style={styles.timeSelector} onPress={openEndTimePicker} activeOpacity={0.7}>
+                    <Text style={form.horaFin ? styles.timeSelectorValue : styles.timeSelectorPlaceholder}>
+                      {form.horaFin || '--:--'}
+                    </Text>
+                    <Ionicons name="time-outline" size={16} color="#555" />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </Section>
@@ -328,6 +390,68 @@ export default function ClaseForm() {
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {showStartTimePicker && (
+        Platform.OS === 'ios' ? (
+          <Modal visible transparent animationType="slide">
+            <TouchableOpacity style={timePickerStyles.overlay} activeOpacity={1} onPress={() => setShowStartTimePicker(false)}>
+              <View style={[timePickerStyles.sheet, { paddingHorizontal: 20 }]}>
+                <View style={timePickerStyles.handle} />
+                <Text style={timePickerStyles.title}>Hora inicio</Text>
+                <DateTimePicker
+                  value={pickerStartTime}
+                  mode="time"
+                  display="spinner"
+                  onChange={onStartTimeChange}
+                  locale="es-AR"
+                  themeVariant="dark"
+                />
+                <TouchableOpacity style={styles.saveBtn} onPress={() => setShowStartTimePicker(false)}>
+                  <Text style={styles.saveBtnText}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={pickerStartTime}
+            mode="time"
+            display="default"
+            onChange={onStartTimeChange}
+          />
+        )
+      )}
+
+      {showEndTimePicker && (
+        Platform.OS === 'ios' ? (
+          <Modal visible transparent animationType="slide">
+            <TouchableOpacity style={timePickerStyles.overlay} activeOpacity={1} onPress={() => setShowEndTimePicker(false)}>
+              <View style={[timePickerStyles.sheet, { paddingHorizontal: 20 }]}>
+                <View style={timePickerStyles.handle} />
+                <Text style={timePickerStyles.title}>Hora fin</Text>
+                <DateTimePicker
+                  value={pickerEndTime}
+                  mode="time"
+                  display="spinner"
+                  onChange={onEndTimeChange}
+                  locale="es-AR"
+                  themeVariant="dark"
+                />
+                <TouchableOpacity style={styles.saveBtn} onPress={() => setShowEndTimePicker(false)}>
+                  <Text style={styles.saveBtnText}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={pickerEndTime}
+            mode="time"
+            display="default"
+            onChange={onEndTimeChange}
+          />
+        )
+      )}
     </SafeAreaView>
   )
 }
@@ -407,6 +531,19 @@ const styles = StyleSheet.create({
   horaField: { flex: 1 },
   horaSep: { paddingBottom: 13 },
   horaSepText: { color: '#333', fontSize: 18 },
+  timeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0f0f0f',
+    borderWidth: 1,
+    borderColor: '#1e1e1e',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  timeSelectorValue: { color: '#fff', fontSize: 15 },
+  timeSelectorPlaceholder: { color: '#333', fontSize: 15 },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -450,6 +587,36 @@ const sectionStyles = StyleSheet.create({
   container: { gap: 12 },
   label: { fontSize: 11, color: '#444', letterSpacing: 1.5, fontWeight: '600' },
   content: { gap: 12 },
+})
+
+const timePickerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: '#000000bb',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#111',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#333',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
 })
 
 const fieldStyles = StyleSheet.create({

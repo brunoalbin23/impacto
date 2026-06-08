@@ -4,7 +4,9 @@
 
 -- get_dashboard_alumno: rutina activa + cuota más reciente del alumno autenticado
 -- Siempre devuelve 1 fila; los campos son NULL si no hay datos.
-CREATE OR REPLACE FUNCTION public.get_dashboard_alumno()
+DROP FUNCTION IF EXISTS public.get_dashboard_alumno();
+DROP FUNCTION IF EXISTS public.get_dashboard_alumno(UUID);
+CREATE OR REPLACE FUNCTION public.get_dashboard_alumno(p_alumno_id UUID)
 RETURNS TABLE(
   alumno_id         UUID,
   rutina_id         UUID,
@@ -20,12 +22,22 @@ RETURNS TABLE(
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  v_alumno_id UUID;
+  v_alumno_id  UUID;
+  v_user_email TEXT;
 BEGIN
-  -- Busca el registro de alumnos por profile_id = usuario autenticado
+  -- Email del usuario (para el fallback cuando el alumno fue creado manualmente por el entrenador)
+  SELECT email INTO v_user_email FROM auth.users WHERE id = p_alumno_id;
+
+  -- Busca por profile_id directo primero; si hay varios, prioriza el que tenga cuotas/rutinas.
   SELECT a.id INTO v_alumno_id
   FROM public.alumnos a
-  WHERE a.profile_id = auth.uid() AND a.estado = 'activo'
+  JOIN public.profiles p ON p.id = a.profile_id
+  WHERE a.estado = 'activo'
+    AND (a.profile_id = p_alumno_id OR p.email = v_user_email)
+  ORDER BY
+    (a.profile_id = p_alumno_id) DESC,
+    (EXISTS (SELECT 1 FROM public.cuotas c WHERE c.alumno_id = a.id)) DESC,
+    (EXISTS (SELECT 1 FROM public.rutina_alumnos ra WHERE ra.alumno_id = a.id AND ra.activa = true)) DESC
   LIMIT 1;
 
   -- Siempre devuelve 1 fila aunque no haya datos (nulls)
@@ -74,7 +86,7 @@ BEGIN
   FROM (SELECT 1) AS t;
 END;
 $$;
-GRANT EXECUTE ON FUNCTION public.get_dashboard_alumno() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_dashboard_alumno(UUID) TO authenticated;
 
 
 -- get_clases_disponibles: todas las clases con nombre del entrenador
