@@ -192,6 +192,14 @@ export default function DashboardAlumno() {
             <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>Historial</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.actionBtnSecondary, styles.actionBtnFull]}
+          onPress={() => router.push('/(tabs)/alumno/progreso')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="bar-chart-outline" size={20} color="#fff" />
+          <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>Mi progreso</Text>
+        </TouchableOpacity>
 
         {/* ── Mi rutina ── */}
         <View style={styles.card}>
@@ -448,6 +456,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1e1e1e',
   },
+  actionBtnFull:          { marginHorizontal: 16, marginTop: -6, marginBottom: 10 },
   actionBtnText:          { color: '#000', fontSize: 15, fontWeight: '700' },
   actionBtnTextSecondary: { color: '#fff' },
 

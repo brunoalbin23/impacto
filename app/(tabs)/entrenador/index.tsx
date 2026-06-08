@@ -98,6 +98,18 @@ export default function EntrenadorDashboard() {
 
         <TouchableOpacity
           style={styles.solicitudesCard}
+          onPress={() => router.push('/(tabs)/entrenador/progreso' as any)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.solicitudesLeft}>
+            <Ionicons name="bar-chart-outline" size={24} color="#fff" />
+            <Text style={styles.solicitudesLabel}>Progreso alumnos</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#444" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.solicitudesCard}
           onPress={() => router.push('/(tabs)/entrenador/solicitudes')}
           activeOpacity={0.7}
         >
